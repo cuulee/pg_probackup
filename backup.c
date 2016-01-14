@@ -198,25 +198,27 @@ do_backup_database(parray *backup_list, pgBackupOption bkupopt)
 			if (timeline_history[i].tli == current.tli)
 			{
 				current_tli_index = i;
-				printf("Find timeline index\n");
+				elog(LOG, "found timeline index");
 				break;
 			}
 		}
 		if (current_tli_index < 0)
 		{
-			printf("Can't find timeline index\n");
+			elog(LOG, "could not find timeline index");
 			exit(1);
 		}
 		parray_qsort(backup_files_list, pgFileComparePathDesc);
 
 		/* for debug now, maybe need remove*/
-		if (verbose)
-		{
-			printf("extractPageMap\n");
-			printf("current_tli_index:%X  current_tli:%X\n", current_tli_index, current.tli);
-			printf("prev_backup->start_lsn: %X/%X\n", (uint32) (prev_backup->start_lsn >> 32), (uint32) (prev_backup->start_lsn));
-			printf("current.start_lsn: %X/%X\n", (uint32) (current.start_lsn >> 32), (uint32) (current.start_lsn));
-		}
+		elog(LOG, "extractPageMap\n");
+		elog(LOG, "current_tli_index:%X current_tli:%X\n",
+			   current_tli_index, current.tli);
+		elog(LOG, "prev_backup->start_lsn: %08X/%08X\n",
+			 (uint32) (prev_backup->start_lsn >> 32),
+			 (uint32) (prev_backup->start_lsn));
+		elog(LOG, "current.start_lsn: %X/%X\n",
+			 (uint32) (current.start_lsn >> 32),
+			 (uint32) (current.start_lsn));
 		extractPageMap(arclog_path, prev_backup->start_lsn, current_tli_index,
 					   current.start_lsn);
 	}
@@ -891,10 +893,7 @@ checkControlFile(ControlFileData *ControlFile)
 
 	/* And simply compare it */
 	if (!EQ_CRC32C(crc, ControlFile->crc))
-	{
-		printf("unexpected control file CRC\n");
-		exit(1);
-	}
+		elog(ERROR_PG_INCOMPATIBLE, "unexpected control file CRC");
 
 	/*
 	 * Node work is done on need to use checksums or hint bit wal-logging
@@ -903,10 +902,8 @@ checkControlFile(ControlFileData *ControlFile)
 	 */
 	if (ControlFile->data_checksum_version != PG_DATA_CHECKSUM_VERSION &&
 		!ControlFile->wal_log_hints)
-	{
-		printf("target master need to use either data checksums or \"wal_log_hints = on\".\n");
-		exit(1);
-	}
+		elog(ERROR_PG_INCOMPATIBLE,
+			 "target master need to use either data checksums or \"wal_log_hints = on\".\n");
 }
 
 /*
@@ -915,11 +912,9 @@ checkControlFile(ControlFileData *ControlFile)
 static void
 digestControlFile(ControlFileData *ControlFile, char *src, size_t size)
 {
-	if (size != PG_CONTROL_SIZE) {
-		printf("unexpected control file size %d, expected %d\n",
+	if (size != PG_CONTROL_SIZE)
+		elog(ERROR_PG_INCOMPATIBLE, "unexpected control file size %d, expected %d\n",
 				 (int) size, PG_CONTROL_SIZE);
-		exit(1);
-	}
 
 	memcpy(ControlFile, src, sizeof(ControlFileData));
 
@@ -1005,25 +1000,18 @@ rewind_parseTimeLineHistory(char *buffer, TimeLineID targetTLI, int *nentries)
 
 		nfields = sscanf(fline, "%u\t%X/%X", &tli, &switchpoint_hi, &switchpoint_lo);
 
+		/* expect a numeric timeline ID as first field of line */
 		if (nfields < 1)
-		{
-			/* expect a numeric timeline ID as first field of line */
-			fprintf(stderr, _("syntax error in history file: %s\n"), fline);
-			fprintf(stderr, _("Expected a numeric timeline ID.\n"));
-			exit(1);
-		}
+			elog(ERROR_PG_INCOMPATIBLE,
+				 "syntax error in history file: %s, expected a numeric timeline ID",
+				 fline);
 		if (nfields != 3)
-		{
-			fprintf(stderr, _("syntax error in history file: %s\n"), fline);
-			fprintf(stderr, _("Expected a transaction log switchpoint location.\n"));
-			exit(1);
-		}
+			elog(ERROR_PG_INCOMPATIBLE,
+				 "syntax error in history file: %s, expected a transaction log switchpoint location", fline);
 		if (entries && tli <= lasttli)
-		{
-			fprintf(stderr, _("invalid data in history file: %s\n"), fline);
-			fprintf(stderr, _("Timeline IDs must be in increasing sequence.\n"));
-			exit(1);
-		}
+			elog(ERROR_PG_INCOMPATIBLE,
+				 "invalid data in history file: %s, timeline IDs must be in increasing sequence",
+				 fline);
 
 		lasttli = tli;
 
@@ -1035,16 +1023,14 @@ rewind_parseTimeLineHistory(char *buffer, TimeLineID targetTLI, int *nentries)
 		entry->begin = prevend;
 		entry->end = ((uint64) (switchpoint_hi)) << 32 | (uint64) switchpoint_lo;
 		prevend = entry->end;
-		//printf("begin:%X end:%X\n", entry->begin, entry->end);
-		/* we ignore the remainder of each line */
+		elog(LOG, "begin: %X/%X end: %X/%X",
+			 (uint32) (entry->begin >> 32), (uint32) entry->begin,
+			 (uint32) (entry->end >> 32), (uint32) entry->end);
+		/* we ignore the rest of each line */
 	}
 
 	if (entries && targetTLI <= lasttli)
-	{
-		fprintf(stderr, _("invalid data in history file\n"));
-		fprintf(stderr, _("Timeline IDs must be less than child timeline's ID.\n"));
-		exit(1);
-	}
+		elog(ERROR_PG_INCOMPATIBLE, "invalid data in history file, timeline IDs must be less than child timeline's ID");
 
 	/*
 	 * Create one more entry for the "tip" of the timeline, which has no entry
@@ -1105,7 +1091,8 @@ getTimelineHistory(ControlFileData *controlFile, int *nentries)
 
 	if (verbose)
 	{
-		printf("Timeline history:\n");
+		elog(LOG, "Timeline history:");
+
 		/*
 		 * Print the target timeline history.
 		 */
@@ -1114,9 +1101,9 @@ getTimelineHistory(ControlFileData *controlFile, int *nentries)
 			TimeLineHistoryEntry *entry;
 
 			entry = &history[i];
-			printf("%d: %X/%X - %X/%X\n", entry->tli,
-				(uint32) (entry->begin >> 32), (uint32) (entry->begin),
-				(uint32) (entry->end >> 32), (uint32) (entry->end));
+			elog(LOG, "%d: %X/%X - %X/%X\n", entry->tli,
+				 (uint32) (entry->begin >> 32), (uint32) (entry->begin),
+				 (uint32) (entry->end >> 32), (uint32) (entry->end));
 		}
 	}
 	return history;

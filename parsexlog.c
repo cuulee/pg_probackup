@@ -270,15 +270,14 @@ SimpleXLogPageRead(XLogReaderState *xlogreader, XLogRecPtr targetPagePtr,
 		XLogFileName(xlogfname, timeline_history[private->tliIndex].tli, xlogreadsegno);
 
 		snprintf(xlogfpath, MAXPGPATH, "%s/%s", private->datadir, xlogfname);
-		if (verbose)
-			printf("Open xlog %s\n", xlogfpath);
+		elog(LOG, "opening segment %s", xlogfpath);
 
 		xlogreadfd = open(xlogfpath, O_RDONLY | PG_BINARY, 0);
 
 		if (xlogreadfd < 0)
 		{
-			printf(_("could not open file \"%s\": %s\n"), xlogfpath,
-				   strerror(errno));
+			elog(WARNING, "could not open file \"%s\": %s\n",
+				 xlogfpath, strerror(errno));
 			return -1;
 		}
 	}
@@ -291,15 +290,15 @@ SimpleXLogPageRead(XLogReaderState *xlogreader, XLogRecPtr targetPagePtr,
 	/* Read the requested page */
 	if (lseek(xlogreadfd, (off_t) targetPageOff, SEEK_SET) < 0)
 	{
-		printf(_("could not seek in file \"%s\": %s\n"), xlogfpath,
-			   strerror(errno));
+		elog(WARNING, "could not seek in file \"%s\": %s\n", xlogfpath,
+			 strerror(errno));
 		return -1;
 	}
 
 	if (read(xlogreadfd, readBuf, XLOG_BLCKSZ) != XLOG_BLCKSZ)
 	{
-		printf(_("could not read from file \"%s\": %s\n"), xlogfpath,
-			   strerror(errno));
+		elog(WARNING, "could not read from file \"%s\": %s\n",
+			xlogfpath, strerror(errno));
 		return -1;
 	}
 

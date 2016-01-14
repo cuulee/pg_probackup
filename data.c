@@ -88,7 +88,7 @@ backup_data_file(const char *from_root, const char *to_root,
 
 	if (current.backup_mode == BACKUP_MODE_DIFF_PAGE && file->pagemap.bitmapsize == 0)
 	{
-		printf("not found pages");
+		elog(LOG, "no pages found pages");
 		return false;
 	}
 
@@ -145,11 +145,10 @@ backup_data_file(const char *from_root, const char *to_root,
 		if (offset > 0)
 		{
 			ret = fseek (in, offset, SEEK_SET);
-			if(ret != 0)
-			{
-				printf("Can't seek in file offset: %llu ret:%i\n", (long long unsigned int) offset, ret);
-				exit(1);
-			}
+			if (ret != 0)
+				elog(ERROR_PG_INCOMPATIBLE,
+					 "Can't seek in file offset: %llu ret:%i\n",
+					 (long long unsigned int) offset, ret);
 		}
 		read_len = fread(&page, 1, sizeof(page), in);
 
