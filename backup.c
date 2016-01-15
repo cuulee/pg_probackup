@@ -60,7 +60,7 @@ static parray *
 do_backup_database(parray *backup_list, pgBackupOption bkupopt)
 {
 	int			i;
-	parray	   *files = NULL;
+	parray	   *files;
 	parray	   *prev_files = NULL;	/* file list of previous database backup */
 	FILE	   *fp;
 	char		path[MAXPGPATH];
@@ -170,7 +170,7 @@ do_backup_database(parray *backup_list, pgBackupOption bkupopt)
 			 (uint32) (*lsn >> 32), (uint32) *lsn);
 	}
 
-	/* initialize backup list from non-snapshot */
+	/* initialize backup list */
 	backup_files_list = parray_new();
 
 	/* list files with the logical path. omit $PGDATA */
@@ -885,12 +885,13 @@ datasegpath(RelFileNode rnode, ForkNumber forknum, BlockNumber segno)
 }
 
 /*
- * This callback gets called while we read the WAL in the target, for every
- * block that have changed in the target system. It makes note of all the
- * changed blocks in the pagemap of the file.
+ * This routine gets called while reading WAL segments from the WAL archive,
+ * for every block that have changed in the target system. It makes note of
+ * all the changed blocks in the pagemap of the file and adds them in the
+ * things to track for the backup..
  */
 void
-arman_process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
+process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
 {
 	char		*path;
 	char		*rel_path;
@@ -902,7 +903,7 @@ arman_process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber bl
 	blkno_inseg = blkno % RELSEG_SIZE;
 
 	rel_path = datasegpath(rnode, forknum, segno);
-	path = pg_malloc(strlen(rel_path)+strlen(pgdata)+2);
+	path = pg_malloc(strlen(rel_path) + strlen(pgdata) + 2);
 	sprintf(path, "%s/%s", pgdata, rel_path);
 	file_item = (pgFile *) parray_bsearch(backup_files_list, path, pgFileCharComparePath);
 

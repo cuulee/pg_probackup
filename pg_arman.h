@@ -207,8 +207,8 @@ extern int do_backup(pgBackupOption bkupopt);
 extern BackupMode parse_backup_mode(const char *value);
 extern void check_server_version(void);
 extern bool fileExists(const char *path);
-extern void
-arman_process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno);
+extern void process_block_change(ForkNumber forknum, RelFileNode rnode,
+								 BlockNumber blkno);
 
 /* in restore.c */
 extern int do_restore(const char *target_time,
