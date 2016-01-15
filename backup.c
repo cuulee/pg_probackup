@@ -750,6 +750,10 @@ backup_files(const char *from_root,
 					elog(LOG, "skip");
 					continue;
 				}
+
+				/* if the file was not in the previous backup simply copy it  */
+				if (prev_file == NULL)
+					file->is_datafile = false;
 			}
 
 			/*
