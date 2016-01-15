@@ -14,6 +14,8 @@
 #include <time.h>
 #include <sys/stat.h>
 
+#include "storage/bufpage.h"
+
 const char *PROGRAM_VERSION	= "0.1";
 const char *PROGRAM_URL		= "https://github.com/michaelpq/pg_arman";
 const char *PROGRAM_EMAIL	= "https://github.com/michaelpq/pg_arman/issues";
@@ -46,6 +48,7 @@ static bool			show_all = false;
 
 static void opt_backup_mode(pgut_option *opt, const char *arg);
 static void parse_range(pgBackupRange *range, const char *arg1, const char *arg2);
+static void sanityChecks(void);
 
 static pgut_option options[] =
 {
@@ -147,6 +150,9 @@ main(int argc, char *argv[])
 		elog(ERROR_ARGS, "-D, --pgdata must be an absolute path");
 	if (arclog_path != NULL && !is_absolute_path(arclog_path))
 		elog(ERROR_ARGS, "-A, --arclog-path must be an absolute path");
+
+	/* Do some sanity checks on the node state */
+	sanityChecks();
 
 	/* setup exclusion list for file search */
 	for (i = 0; pgdata_exclude[i]; i++)		/* find first empty slot */
@@ -307,4 +313,27 @@ static void
 opt_backup_mode(pgut_option *opt, const char *arg)
 {
 	current.backup_mode = parse_backup_mode(arg);
+}
+
+static void
+sanityChecks(void)
+{
+	ControlFileData ControlFile;
+	char       *buffer;
+	size_t      size;
+
+	/* First fetch file... */
+	buffer = slurpFile(pgdata, "global/pg_control", &size);
+	digestControlFile(&ControlFile, buffer, size);
+	pg_free(buffer);
+
+	/*
+	 * Node work is done on need to use checksums or hint bit wal-logging
+	 * this to prevent from data corruption that could occur because of
+	 * hint bits.
+	 */
+	if (ControlFile.data_checksum_version != PG_DATA_CHECKSUM_VERSION &&
+		!ControlFile.wal_log_hints)
+		elog(ERROR_PG_INCOMPATIBLE,
+			 "target master need to use either data checksums or \"wal_log_hints = on\".\n");
 }

@@ -74,16 +74,31 @@ backup_data_file(const char *from_root, const char *to_root,
 	FILE			   *out;
 	BackupPageHeader	header;
 	DataPage			page;		/* used as read buffer */
-	BlockNumber			blknum;
-	size_t				read_len;
-	int					errno_tmp;
+	BlockNumber			blknum = 0;
+	size_t				read_len = 0;
 	pg_crc32			crc;
+	datapagemap_iterator_t *iter;
+	off_t				offset;
 
 	INIT_CRC32C(crc);
 
 	/* reset size summary */
 	file->read_size = 0;
 	file->write_size = 0;
+
+	if (current.backup_mode == BACKUP_MODE_DIFF_PAGE && file->pagemap.bitmapsize == 0)
+	{
+		elog(LOG, "no pages found pages");
+		return false;
+	}
+
+	if (current.backup_mode == BACKUP_MODE_FULL)
+	{
+		//close(in);
+		//fclose(out);
+		file->is_datafile = false;
+		return copy_file(from_root, to_root, file);
+	}
 
 	/* open backup mode file for read */
 	in = fopen(file->path, "r");
@@ -118,13 +133,24 @@ backup_data_file(const char *from_root, const char *to_root,
 	check_server_version();
 
 	/* read each page and write the page excluding hole */
-	for (blknum = 0;
-		 (read_len = fread(&page, 1, sizeof(page), in)) == sizeof(page);
-		 ++blknum)
+	iter = datapagemap_iterate(&file->pagemap);
+	while (datapagemap_next(iter, &blknum))
 	{
 		XLogRecPtr	page_lsn;
 		int		upper_offset;
 		int		upper_length;
+		int 	ret;
+
+		offset = blknum * BLCKSZ;
+		if (offset > 0)
+		{
+			ret = fseek (in, offset, SEEK_SET);
+			if (ret != 0)
+				elog(ERROR_PG_INCOMPATIBLE,
+					 "Can't seek in file offset: %llu ret:%i\n",
+					 (long long unsigned int) offset, ret);
+		}
+		read_len = fread(&page, 1, sizeof(page), in);
 
 		header.block = blknum;
 
@@ -171,64 +197,8 @@ backup_data_file(const char *from_root, const char *to_root,
 
 		file->write_size += sizeof(header) + read_len - header.hole_length;
 	}
-	errno_tmp = errno;
-	if (!feof(in))
-	{
-		fclose(in);
-		fclose(out);
-		elog(ERROR_SYSTEM, "cannot read backup mode file \"%s\": %s",
-			 file->path, strerror(errno_tmp));
-	}
 
-	/*
-	 * The odd size page at the tail is probably a page exactly written now, so
-	 * write whole of it.
-	 */
-	if (read_len > 0)
-	{
-		/*
-		 * If the odd size page is the 1st page, fallback to simple copy because
-		 * the file is not a datafile.
-		 * Otherwise treat the page as a datapage with no hole.
-		 */
-		if (blknum == 0)
-			file->is_datafile = false;
-		else
-		{
-			header.block = blknum;
-			header.hole_offset = 0;
-			header.hole_length = 0;
-
-			if (fwrite(&header, 1, sizeof(header), out) != sizeof(header))
-			{
-				int errno_tmp = errno;
-				/* oops */
-				fclose(in);
-				fclose(out);
-				elog(ERROR_SYSTEM,
-					 "cannot write at block %u of \"%s\": %s",
-					 blknum, to_path, strerror(errno_tmp));
-			}
-			COMP_CRC32C(crc, &header, sizeof(header));
-			file->write_size += sizeof(header);
-		}
-
-		/* write odd size page image */
-		if (fwrite(page.data, 1, read_len, out) != read_len)
-		{
-			int errno_tmp = errno;
-			/* oops */
-			fclose(in);
-			fclose(out);
-			elog(ERROR_SYSTEM, "cannot write at block %u of \"%s\": %s",
-				 blknum, to_path, strerror(errno_tmp));
-		}
-
-		COMP_CRC32C(crc, page.data, read_len);
-
-		file->write_size += read_len;
-		file->read_size += read_len;
-	}
+	pg_free(iter);
 
 	/*
 	 * update file permission
@@ -344,6 +314,12 @@ restore_data_file(const char *from_root,
 			}
 		}
 
+		/*printf("header.block:%i < blknum:%i || header.hole_offset:%i > BLCKSZ:%i\n",
+				header.block,
+				blknum,
+				header.hole_offset,
+				BLCKSZ
+			);*/
 		if (header.block < blknum || header.hole_offset > BLCKSZ ||
 			(int) header.hole_offset + (int) header.hole_length > BLCKSZ)
 		{

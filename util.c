@@ -11,8 +11,6 @@
 
 #include <time.h>
 
-#include "catalog/pg_control.h"
-
 static void
 checkControlFile(ControlFileData *ControlFile)
 {
@@ -39,7 +37,7 @@ checkControlFile(ControlFileData *ControlFile)
 /*
  * Verify control file contents in the buffer src, and copy it to *ControlFile.
  */
-static void
+void
 digestControlFile(ControlFileData *ControlFile, char *src, size_t size)
 {
 	if (size != PG_CONTROL_SIZE)
