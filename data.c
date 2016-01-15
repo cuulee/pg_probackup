@@ -88,14 +88,12 @@ backup_data_file(const char *from_root, const char *to_root,
 
 	if (current.backup_mode == BACKUP_MODE_DIFF_PAGE && file->pagemap.bitmapsize == 0)
 	{
-		elog(LOG, "no pages found pages");
+		elog(LOG, "no pages found");
 		return false;
 	}
 
 	if (current.backup_mode == BACKUP_MODE_FULL)
 	{
-		//close(in);
-		//fclose(out);
 		file->is_datafile = false;
 		return copy_file(from_root, to_root, file);
 	}
@@ -314,12 +312,11 @@ restore_data_file(const char *from_root,
 			}
 		}
 
-		/*printf("header.block:%i < blknum:%i || header.hole_offset:%i > BLCKSZ:%i\n",
+		elog(LOG, "header block: %i, blknum: %i, hole_offset: %i, BLCKSZ:%i",
 				header.block,
 				blknum,
 				header.hole_offset,
-				BLCKSZ
-			);*/
+				BLCKSZ);
 		if (header.block < blknum || header.hole_offset > BLCKSZ ||
 			(int) header.hole_offset + (int) header.hole_length > BLCKSZ)
 		{
@@ -357,6 +354,7 @@ restore_data_file(const char *from_root,
 	if (chmod(to_path, file->mode) == -1)
 	{
 		int errno_tmp = errno;
+
 		fclose(in);
 		fclose(out);
 		elog(ERROR_SYSTEM, "cannot change mode of \"%s\": %s", to_path,
