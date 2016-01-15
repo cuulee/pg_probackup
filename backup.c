@@ -888,7 +888,7 @@ datasegpath(RelFileNode rnode, ForkNumber forknum, BlockNumber segno)
  * This routine gets called while reading WAL segments from the WAL archive,
  * for every block that have changed in the target system. It makes note of
  * all the changed blocks in the pagemap of the file and adds them in the
- * things to track for the backup..
+ * things to track for the backup.
  */
 void
 process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
@@ -916,9 +916,9 @@ process_block_change(ForkNumber forknum, RelFileNode rnode, BlockNumber blkno)
 	{
 		/*
 		 * If we don't have any record of this file in the file map, it means
-		 * that it's a relation that doesn't exist in the source system, and
-		 * it was subsequently removed in the target system, too. We can
-		 * safely ignore it.
+		 * that it's a relation that did not have much activity since the last
+		 * backup. We can safely ignore it. If it is a new relation file, the
+		 * backup would simply copy it as-is.
 		 */
 	}
 	pg_free(path);
