@@ -296,6 +296,7 @@ extern void extractPageMap(const char *datadir, XLogRecPtr startpoint,
 extern TimeLineID get_current_timeline(void);
 extern void digestControlFile(ControlFileData *ControlFile, char *src,
 							  size_t size);
+extern void sanityChecks(void);
 extern void time2iso(char *buf, size_t len, time_t time);
 extern const char *status2str(BackupStatus status);
 extern void remove_trailing_space(char *buf, int comment_mark);

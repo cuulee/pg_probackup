@@ -11,6 +11,8 @@
 
 #include <time.h>
 
+#include "storage/bufpage.h"
+
 static void
 checkControlFile(ControlFileData *ControlFile)
 {
@@ -48,6 +50,29 @@ digestControlFile(ControlFileData *ControlFile, char *src, size_t size)
 
 	/* Additional checks on control file */
 	checkControlFile(ControlFile);
+}
+
+void
+sanityChecks(void)
+{
+	ControlFileData	ControlFile;
+	char		   *buffer;
+	size_t			size;
+
+	/* First fetch file... */
+	buffer = slurpFile(pgdata, "global/pg_control", &size);
+	digestControlFile(&ControlFile, buffer, size);
+	pg_free(buffer);
+
+	/*
+	 * Node work is done on need to use checksums or hint bit wal-logging
+	 * this to prevent from data corruption that could occur because of
+	 * hint bits.
+	 */
+	if (ControlFile.data_checksum_version != PG_DATA_CHECKSUM_VERSION &&
+		!ControlFile.wal_log_hints)
+		elog(ERROR_PG_INCOMPATIBLE,
+			 "target master need to use either data checksums or \"wal_log_hints = on\".\n");
 }
 
 /*

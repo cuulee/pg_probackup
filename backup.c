@@ -83,6 +83,9 @@ do_backup_database(parray *backup_list, pgBackupOption bkupopt)
 	/* Initialize size summary */
 	current.data_bytes = 0;
 
+	/* do some checks on the node */
+	sanityChecks();
+
 	/*
 	 * Obtain current timeline by scanning control file, theh LSN
 	 * obtained at output of pg_start_backup or pg_stop_backup does
