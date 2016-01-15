@@ -86,16 +86,11 @@ backup_data_file(const char *from_root, const char *to_root,
 	file->read_size = 0;
 	file->write_size = 0;
 
-	if (current.backup_mode == BACKUP_MODE_DIFF_PAGE && file->pagemap.bitmapsize == 0)
+	if (current.backup_mode == BACKUP_MODE_DIFF_PAGE &&
+		file->pagemap.bitmapsize == 0)
 	{
-		elog(LOG, "no pages found");
+		elog(LOG, "no pages found for file \"%s\"", from_root);
 		return false;
-	}
-
-	if (current.backup_mode == BACKUP_MODE_FULL)
-	{
-		file->is_datafile = false;
-		return copy_file(from_root, to_root, file);
 	}
 
 	/* open backup mode file for read */
